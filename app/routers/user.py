@@ -4,7 +4,7 @@ from typing import Annotated
 from sqlalchemy import insert, select, update, delete
 from slugify import slugify
 
-from app.models import User
+from app.models import User, Task
 from app.schemas import CreateUser, UpdateUser
 from app.backend.db_depends import get_db
 
@@ -26,6 +26,16 @@ async def user_by_id(user_id: int, db: Annotated[Session, Depends(get_db)]):
     raise HTTPException(status_code=404, detail="User was not found")
 
 
+@router.get('/user_id/tasks')
+async def tasks_by_user_id(user_id: int, db: Annotated[Session, Depends(get_db)]):
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=404, detail="User was not found")
+
+    tasks = db.scalars(select(Task).where(Task.user_id == user_id)).all()
+    return tasks
+
+
 @router.post('/create')
 async def create_user(db: Annotated[Session, Depends(get_db)], user_data: CreateUser):
     existing_user = db.scalars(
@@ -43,7 +53,8 @@ async def create_user(db: Annotated[Session, Depends(get_db)], user_data: Create
 
 
 @router.put('/update')
-async def update_user(db: Annotated[Session, Depends(get_db)], user_id: int, user_update: UpdateUser):
+async def update_user(db: Annotated[Session, Depends(get_db)],
+                      user_id: int, user_update: UpdateUser):
     user = db.execute(select(User).where(User.id == user_id)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User was not found")
@@ -63,6 +74,8 @@ async def delete_user(db: Annotated[Session, Depends(get_db)], user_id: int):
     user = db.scalar(select(User).where(User.id == user_id))
     if not user:
         raise HTTPException(status_code=404, detail="User was not found")
+
+    db.execute(delete(Task).where(Task.user_id == user_id))
     db.execute(delete(User).where(User.id == user_id))
     db.commit()
-    return {'status_code': status.HTTP_200_OK, 'transaction': 'User delete is successful'}
+    return {'status_code': status.HTTP_200_OK, 'transaction': 'User and related tasks deleted successfully'}
